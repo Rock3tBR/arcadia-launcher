@@ -1,0 +1,20 @@
+[package]
+name = "arcadia-launcher"
+version = "0.1.0"
+description = "Launcher local e multiplataforma para bibliotecas de jogos"
+authors = ["Arcadia contributors"]
+edition = "2021"
+
+[lib]
+name = "arcadia_launcher_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = "2"
+
+[dependencies]
+tauri = "2"
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+rusqlite = { version = "0.41", features = ["bundled"] }
+shell-words = "1.1"
