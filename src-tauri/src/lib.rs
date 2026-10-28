@@ -151,7 +151,9 @@ fn validate_name(value: &str, label: &str, max_chars: usize) -> Result<String, S
         return Err(format!("Informe {label}."));
     }
     if normalized.chars().count() > max_chars {
-        return Err(format!("{label} deve ter no máximo {max_chars} caracteres."));
+        return Err(format!(
+            "{label} deve ter no máximo {max_chars} caracteres."
+        ));
     }
     if normalized.chars().any(char::is_control) {
         return Err(format!("{label} contém caracteres inválidos."));
@@ -235,7 +237,8 @@ fn initialize_database(connection: &Connection) -> Result<(), rusqlite::Error> {
          CREATE INDEX IF NOT EXISTS idx_app_sessions_start ON app_sessions(started_at);"#,
     )?;
 
-    let profile_count: i64 = connection.query_row("SELECT COUNT(*) FROM profiles", [], |row| row.get(0))?;
+    let profile_count: i64 =
+        connection.query_row("SELECT COUNT(*) FROM profiles", [], |row| row.get(0))?;
     if profile_count == 0 {
         connection.execute(
             "INSERT INTO profiles(name, created_at) VALUES(?1, ?2)",
@@ -243,11 +246,10 @@ fn initialize_database(connection: &Connection) -> Result<(), rusqlite::Error> {
         )?;
     }
 
-    let first_profile_id: i64 = connection.query_row(
-        "SELECT id FROM profiles ORDER BY id LIMIT 1",
-        [],
-        |row| row.get(0),
-    )?;
+    let first_profile_id: i64 =
+        connection.query_row("SELECT id FROM profiles ORDER BY id LIMIT 1", [], |row| {
+            row.get(0)
+        })?;
     connection.execute(
         "INSERT OR IGNORE INTO app_settings(key, value) VALUES('active_profile_id', ?1)",
         params![first_profile_id.to_string()],
@@ -275,7 +277,10 @@ fn profile_exists(connection: &Connection, profile_id: i64) -> Result<bool, rusq
     )
 }
 
-fn achievement_metrics(connection: &Connection, profile_id: i64) -> Result<(i64, i64, i64, i64), rusqlite::Error> {
+fn achievement_metrics(
+    connection: &Connection,
+    profile_id: i64,
+) -> Result<(i64, i64, i64, i64), rusqlite::Error> {
     let launch_count: i64 = connection.query_row(
         "SELECT COUNT(*) FROM game_sessions WHERE profile_id = ?1 AND (ended_at IS NULL OR ended_at > started_at)",
         params![profile_id],
@@ -296,10 +301,18 @@ fn achievement_metrics(connection: &Connection, profile_id: i64) -> Result<(i64,
         params![profile_id],
         |row| row.get(0),
     )?;
-    Ok((launch_count, distinct_games, played_seconds, longest_session))
+    Ok((
+        launch_count,
+        distinct_games,
+        played_seconds,
+        longest_session,
+    ))
 }
 
-fn refresh_achievements(connection: &Connection, profile_id: i64) -> Result<Vec<Achievement>, rusqlite::Error> {
+fn refresh_achievements(
+    connection: &Connection,
+    profile_id: i64,
+) -> Result<Vec<Achievement>, rusqlite::Error> {
     let (launch_count, distinct_games, played_seconds, longest_session) =
         achievement_metrics(connection, profile_id)?;
     let mut newly_unlocked = Vec::new();
@@ -348,8 +361,10 @@ fn canonical_file(path: &str, label: &str) -> Result<PathBuf, String> {
     if !candidate.is_absolute() {
         return Err(format!("O caminho de {label} precisa ser absoluto."));
     }
-    let canonical = fs::canonicalize(candidate).map_err(|_| format!("Não foi possível localizar {label}."))?;
-    let metadata = fs::metadata(&canonical).map_err(|_| format!("Não foi possível ler {label}."))?;
+    let canonical =
+        fs::canonicalize(candidate).map_err(|_| format!("Não foi possível localizar {label}."))?;
+    let metadata =
+        fs::metadata(&canonical).map_err(|_| format!("Não foi possível ler {label}."))?;
     if !metadata.is_file() {
         return Err(format!("O caminho de {label} não aponta para um arquivo."));
     }
@@ -359,7 +374,8 @@ fn canonical_file(path: &str, label: &str) -> Result<PathBuf, String> {
 #[cfg(unix)]
 fn ensure_executable(path: &Path) -> Result<(), String> {
     use std::os::unix::fs::PermissionsExt;
-    let metadata = fs::metadata(path).map_err(|_| "Não foi possível ler o executável.".to_string())?;
+    let metadata =
+        fs::metadata(path).map_err(|_| "Não foi possível ler o executável.".to_string())?;
     if metadata.permissions().mode() & 0o111 == 0 {
         return Err("O arquivo selecionado não tem permissão de execução. Verifique as permissões do emulador.".to_string());
     }
@@ -376,7 +392,10 @@ fn parse_launch_arguments(template: &str, game_path: &str) -> Result<Vec<String>
         return Err("Informe os argumentos de inicialização e inclua {game}.".to_string());
     }
     if !template.contains("{game}") {
-        return Err("Os argumentos precisam conter {game}, que será substituído pelo caminho do jogo.".to_string());
+        return Err(
+            "Os argumentos precisam conter {game}, que será substituído pelo caminho do jogo."
+                .to_string(),
+        );
     }
     let parsed = shell_words::split(template)
         .map_err(|_| "Os argumentos do emulador têm aspas ou formatação inválida.".to_string())?;
@@ -408,11 +427,16 @@ fn list_profiles(state: State<'_, AppState>) -> Result<Vec<Profile>, String> {
             })
         })
         .map_err(|error| error.to_string())?;
-    rows.collect::<Result<Vec<_>, _>>().map_err(|error| error.to_string())
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
-fn create_profile(app: AppHandle, state: State<'_, AppState>, name: String) -> Result<Profile, String> {
+fn create_profile(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    name: String,
+) -> Result<Profile, String> {
     let normalized_name = validate_name(&name, "o nome do perfil", 32)?;
     let created_at = now_epoch();
     let profile = {
@@ -459,7 +483,9 @@ fn get_active_profile_id(state: State<'_, AppState>) -> Result<i64, String> {
         }
     }
     let profile_id: i64 = connection
-        .query_row("SELECT id FROM profiles ORDER BY id LIMIT 1", [], |row| row.get(0))
+        .query_row("SELECT id FROM profiles ORDER BY id LIMIT 1", [], |row| {
+            row.get(0)
+        })
         .map_err(|error| error.to_string())?;
     connection
         .execute(
@@ -518,7 +544,8 @@ fn list_games(state: State<'_, AppState>, profile_id: i64) -> Result<Vec<GameRec
             })
         })
         .map_err(|error| error.to_string())?;
-    rows.collect::<Result<Vec<_>, _>>().map_err(|error| error.to_string())
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -547,7 +574,10 @@ fn add_game(
                 params![normalized_title, system, path_string, added_at],
             )
             .map_err(|error| {
-                if error.to_string().contains("UNIQUE constraint failed: games.path") {
+                if error
+                    .to_string()
+                    .contains("UNIQUE constraint failed: games.path")
+                {
                     "Esse arquivo já está cadastrado na biblioteca.".to_string()
                 } else {
                     error.to_string()
@@ -593,7 +623,9 @@ fn list_emulator_configs(state: State<'_, AppState>) -> Result<Vec<EmulatorConfi
             })
         })
         .map_err(|error| error.to_string())?;
-    let configured = rows.collect::<Result<Vec<_>, _>>().map_err(|error| error.to_string())?;
+    let configured = rows
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())?;
     Ok(SUPPORTED_SYSTEMS
         .iter()
         .map(|system| {
@@ -674,7 +706,12 @@ fn launch_game(
             )
             .optional()
             .map_err(|error| error.to_string())?
-            .ok_or_else(|| format!("Configure um emulador para {} antes de iniciar este jogo.", game.1))?;
+            .ok_or_else(|| {
+                format!(
+                    "Configure um emulador para {} antes de iniciar este jogo.",
+                    game.1
+                )
+            })?;
         let executable_path = canonical_file(&config.0, "executável do emulador")?;
         ensure_executable(&executable_path)?;
         let arguments = parse_launch_arguments(&config.1, &game_path.to_string_lossy())?;
@@ -686,7 +723,13 @@ fn launch_game(
             )
             .map_err(|error| error.to_string())?;
         let session_id = connection.last_insert_rowid();
-        (game_path, executable_path, arguments, session_id, started_at)
+        (
+            game_path,
+            executable_path,
+            arguments,
+            session_id,
+            started_at,
+        )
     };
 
     let spawn_result = Command::new(&executable_path)
@@ -701,7 +744,10 @@ fn launch_game(
         Ok(child) => child,
         Err(error) => {
             if let Ok(connection) = state.database.lock() {
-                let _ = connection.execute("DELETE FROM game_sessions WHERE id = ?1", params![session_id]);
+                let _ = connection.execute(
+                    "DELETE FROM game_sessions WHERE id = ?1",
+                    params![session_id],
+                );
             }
             return Err(format!("Não foi possível iniciar o emulador: {error}"));
         }
@@ -751,7 +797,10 @@ fn launch_game(
 }
 
 #[tauri::command]
-fn list_achievements(state: State<'_, AppState>, profile_id: i64) -> Result<Vec<Achievement>, String> {
+fn list_achievements(
+    state: State<'_, AppState>,
+    profile_id: i64,
+) -> Result<Vec<Achievement>, String> {
     let connection = database_lock(&state)?;
     if !profile_exists(&connection, profile_id).map_err(|error| error.to_string())? {
         return Err("O perfil selecionado não existe.".to_string());
@@ -788,35 +837,44 @@ fn list_achievements(state: State<'_, AppState>, profile_id: i64) -> Result<Vec<
 }
 
 #[tauri::command]
-fn get_dashboard_stats(state: State<'_, AppState>, profile_id: i64) -> Result<DashboardStats, String> {
+fn get_dashboard_stats(
+    state: State<'_, AppState>,
+    profile_id: i64,
+) -> Result<DashboardStats, String> {
     let connection = database_lock(&state)?;
     if !profile_exists(&connection, profile_id).map_err(|error| error.to_string())? {
         return Err("O perfil selecionado não existe.".to_string());
     }
-    let library_count: i64 = connection.query_row("SELECT COUNT(*) FROM games", [], |row| row.get(0)).map_err(|error| error.to_string())?;
+    let library_count: i64 = connection
+        .query_row("SELECT COUNT(*) FROM games", [], |row| row.get(0))
+        .map_err(|error| error.to_string())?;
     let played_count: i64 = connection.query_row(
         "SELECT COUNT(*) FROM game_progress WHERE profile_id = ?1 AND (total_seconds > 0 OR last_played_at IS NOT NULL)",
         params![profile_id],
         |row| row.get(0),
     ).map_err(|error| error.to_string())?;
-    let total_game_seconds: i64 = connection.query_row(
-        r#"SELECT
+    let total_game_seconds: i64 = connection
+        .query_row(
+            r#"SELECT
           COALESCE((SELECT SUM(total_seconds) FROM game_progress WHERE profile_id = ?1), 0)
           + COALESCE((SELECT SUM(MAX(0, CAST(strftime('%s','now') AS INTEGER) - started_at))
             FROM game_sessions WHERE profile_id = ?1 AND ended_at IS NULL), 0)"#,
-        params![profile_id],
-        |row| row.get(0),
-    ).map_err(|error| error.to_string())?;
+            params![profile_id],
+            |row| row.get(0),
+        )
+        .map_err(|error| error.to_string())?;
     let total_app_seconds: i64 = connection.query_row(
         "SELECT COALESCE(SUM(MAX(0, COALESCE(ended_at, last_heartbeat_at) - started_at)), 0) FROM app_sessions",
         [],
         |row| row.get(0),
     ).map_err(|error| error.to_string())?;
-    let achievement_count: i64 = connection.query_row(
-        "SELECT COUNT(*) FROM profile_achievements WHERE profile_id = ?1",
-        params![profile_id],
-        |row| row.get(0),
-    ).map_err(|error| error.to_string())?;
+    let achievement_count: i64 = connection
+        .query_row(
+            "SELECT COUNT(*) FROM profile_achievements WHERE profile_id = ?1",
+            params![profile_id],
+            |row| row.get(0),
+        )
+        .map_err(|error| error.to_string())?;
     Ok(DashboardStats {
         library_count,
         played_count,
@@ -900,20 +958,19 @@ pub fn run() {
         .expect("erro ao executar Arcadia Launcher");
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn launch_arguments_keep_game_path_as_one_argument() {
-        let args = parse_launch_arguments(
-            "--fullscreen \"{game}\"",
-            "/games/my game.iso",
-        )
-        .expect("argument template should be valid");
+        let args = parse_launch_arguments("--fullscreen \"{game}\"", "/games/my game.iso")
+            .expect("argument template should be valid");
 
-        assert_eq!(args, vec!["--fullscreen".to_string(), "/games/my game.iso".to_string()]);
+        assert_eq!(
+            args,
+            vec!["--fullscreen".to_string(), "/games/my game.iso".to_string()]
+        );
     }
 
     #[test]
@@ -938,7 +995,10 @@ mod tests {
     fn names_reject_empty_or_control_characters() {
         assert!(validate_name("   ", "o nome", 32).is_err());
         assert!(validate_name("perfil\nmalicioso", "o nome", 32).is_err());
-        assert_eq!(validate_name("  Jogador  ", "o nome", 32).unwrap(), "Jogador");
+        assert_eq!(
+            validate_name("  Jogador  ", "o nome", 32).unwrap(),
+            "Jogador"
+        );
     }
 
     #[test]
